@@ -8,6 +8,13 @@ struct Graph {
     private(set) var nodes = Set<String>()
     private(set) var edges = [String : [String]]()
 
+    mutating func addEdge(from startNode: String, to endNode: String) {
+        nodes.insert(startNode)
+        nodes.insert(endNode)
+
+        edges[startNode, default:[]].append(endNode)
+    }
+
     mutating func addEdges(from startNode: String, to endNodes: [String]) {
         nodes.insert(startNode)
         nodes.formUnion(endNodes)
@@ -31,22 +38,49 @@ class Visitor : SyntaxVisitor {
     var typeGraph = TypeInfos()
 
     override func visitPost(_ node: ClassDeclSyntax) {
-        let trimHack = { (string: String) in
-            return string
-                .split(separator: "\n")
-                .map {
-                    $0.trimmingCharacters(in: .whitespaces)
+        let className = node.identifier.text
+
+        if let clause = node.inheritanceClause {
+            for type in clause.inheritedTypeCollection {
+//                var toReturn = ""
+//                let typename = type.typeName
+
+//                        print("\(t.typeName.syntaxNodeType)  --  \(t.typeName.children.map { "\($0.syntaxNodeType)" }.joined(separator: " - "))")
+
+                var childrens = type.typeName.children.makeIterator()
+
+                let firstChild = childrens.next()
+                let secondChild = childrens.next()
+
+                guard let firstChild = firstChild else {
+                    fatalError("zero children in InheritedTypeSyntax")
                 }
-                .joined(separator: " ")
+
+                guard let tokenSyntax = firstChild.as(TokenSyntax.self) else {
+                    fatalError("first child is not TokenSyntax")
+                }
+
+                var typeName = tokenSyntax.text
+
+                if let secondChild = secondChild {
+                    guard let argumentClause = secondChild.as(GenericArgumentClauseSyntax.self) else {
+                        fatalError("second child is not GenericArgumentClauseSyntax")
+                    }
+
+                    let moreTypes = argumentClause.arguments.map {
+                        $0.children.first!.withoutTrivia().description
+                    }
+
+                    let nonSpecializedTypename = typeName
+                    typeName = "\(typeName)<\(moreTypes.joined(separator: ", "))>"
+
+                    typeGraph.classesToInheritedTypes.addEdge(from: typeName, to: nonSpecializedTypename)
+                    typeGraph.classesToInheritedTypes.addEdges(from: typeName, to: moreTypes)
+                }
+
+                typeGraph.classesToInheritedTypes.addEdge(from: className, to: typeName)
+            }
         }
-
-        let className = node.identifier.description
-        let inherited = node.inheritanceClause.map { $0.inheritedTypeCollection.map { trimHack($0.description) } } ?? []
-
-        typeGraph.classesToInheritedTypes.addEdges(
-            from: trimHack(className),
-            to: inherited
-        )
     }
 }
 
