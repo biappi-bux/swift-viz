@@ -64,80 +64,6 @@ func parseSingle(filename: String) -> TypeInfoResult {
     }
 }
 
-protocol RecurseStrategy {
-    init()
-    func recurse<T>(
-        recursivePath: String,
-        paths: [String],
-        parse: @escaping (_ fullpath: String, _ filename: String) -> T,
-        collect: @escaping (_ thing: T, _ fullpath: String, _ filename: String) -> Void,
-        end: @escaping () -> Void
-    )
-}
-
-struct NonThreadedRecurse: RecurseStrategy {
-    func recurse<T>(
-        recursivePath: String,
-        paths: [String],
-        parse: @escaping (_ fullpath: String, _ filename: String) -> T,
-        collect: @escaping (_ thing: T, _ fullpath: String, _ filename: String) -> Void,
-        end: @escaping () -> Void
-    ) {
-        paths
-            .forEach {
-                let name = $0
-                let fullpath = "\(recursivePath)/\(name)"
-                let parsed = parse(fullpath, name)
-                collect(parsed, fullpath, name)
-            }
-
-        end()
-    }
-}
-
-struct ThreadedRecurse: RecurseStrategy {
-    func recurse<T>(
-        recursivePath: String,
-        paths: [String],
-        parse: @escaping (_ fullpath: String, _ filename: String) -> T,
-        collect: @escaping (_ thing: T, _ fullpath: String, _ filename: String) -> Void,
-        end: @escaping () -> Void
-    ) {
-        let queue = DispatchQueue(
-            label: "processing",
-            qos: .userInitiated,
-            attributes: .concurrent,
-            autoreleaseFrequency: .inherit,
-            target: .global(qos: .userInitiated)
-        )
-
-        let group = DispatchGroup()
-
-        let addToQueue = { (name: String) in
-            queue.async {
-                group.enter()
-                let fullpath = "\(recursivePath)/\(name)"
-                let parsed = parse(fullpath, name)
-
-                DispatchQueue.main.async {
-                    group.leave()
-                    collect(parsed, fullpath, name)
-                }
-            }
-        }
-
-        paths.forEach {
-            addToQueue($0)
-        }
-
-        group.notify(queue: DispatchQueue.main) {
-            end()
-        }
-
-        dispatchMain()
-    }
-}
-
 typealias FileProcResult = [String : TypeInfoResult]
 
 func mergeResults(results: FileProcResult) -> Graph {
@@ -190,12 +116,12 @@ struct GenerateHTML: ParsableCommand {
             .filter     { $0.hasSuffix(".swift") }
         ) ?? []
 
-        let recursion: RecurseStrategy =
+        let recursion: ParsingStrategy =
             threaded
-                ? ThreadedRecurse()
-                : NonThreadedRecurse()
+                ? ThreadedParsing()
+                : NonThreadedParsing()
 
-        recursion.recurse(
+        recursion.parse(
             recursivePath: path,
             paths: paths,
             parse: { (path, name) in parseSingle(filename: path) },
