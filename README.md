@@ -20,6 +20,7 @@ command.
     - Improve graph layout
     - Support search / filtering  of nodes
     - Dynamic toggling of type relations, when we support more
+    - Progress bar for graph layout
 - Wannahave
     - Click to expand
     - Links to source files
