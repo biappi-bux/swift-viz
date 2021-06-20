@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+
+<style>
+
+.link {
+  stroke: #aaa;
+}
+
+.node circle{
+stroke:#fff;
+stroke-width:3px;
+fill:#555;
+}
+
+#container {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+}
+
+</style>
+
+<style>
+    #buttonz {
+        position: fixed;
+        top: 0px;
+        right: 0px;
+        width: 200px;
+        height: 100%;
+        background: #eee
+    }
+</style>
+
+<body>
+<script src="https://d3js.org/d3.v3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-hierarchy@3"></script>
+
+<div id='container' style="width: 100%; height: 100%;">
+    <div id="buttonz">
+        suca
+        <div>
+        <div><label>Show labels<input type=checkbox id=showLabels></label></div>
+        <div><label id=gravityRange>Gravity<input type=range min=0 max=100> <p class=value></p></label></div>
+        <div><label id=chargeRange>Charge<input type=range min=0 max=100> <p class=value></p></label></div>
+        <div><label id=chargeDistRange>Charge Distance<input type=range min=0 max=100> <p class=value></p></label></div>
+        <div><label id=distanceRange>Distance<input type=range min=0 max=100> <p class=value></p></label></div>
+        <div><label id=kRange>K<input type=range min=0 max=100> <p class=value></p></label></div>
+    
+        </div>
+    </div>
+</div>
+
+<script src="data1.js"></script>
+<script src="js.js"></script>
+<script>
+got_graph(the_data)
+</script>
+

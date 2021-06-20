@@ -64,56 +64,83 @@ func parseSingle(filename: String) -> TypeInfoResult {
     }
 }
 
-func threadedRecurse(recursivePath: String) {
-    let queue = DispatchQueue(
-        label: "processing",
-        qos: .userInitiated,
-        attributes: .concurrent,
-        autoreleaseFrequency: .inherit,
-        target: .global(qos: .userInitiated)
+protocol RecurseStrategy {
+    init()
+    func recurse<T>(
+        recursivePath: String,
+        paths: [String],
+        parse: @escaping (_ fullpath: String, _ filename: String) -> T,
+        collect: @escaping (_ thing: T, _ fullpath: String, _ filename: String) -> Void,
+        end: @escaping () -> Void
     )
+}
 
-    let group = DispatchGroup()
-
-    var results = [TypeInfoResult]()
-
-    let addToQueue = { (name: String) in
-        queue.async {
-            group.enter()
-            let result = parseSingle(filename: "\(recursivePath)/\(name)")
-
-            DispatchQueue.main.async {
-                group.leave()
-                results.append(result)
+struct NonThreadedRecurse: RecurseStrategy {
+    func recurse<T>(
+        recursivePath: String,
+        paths: [String],
+        parse: @escaping (_ fullpath: String, _ filename: String) -> T,
+        collect: @escaping (_ thing: T, _ fullpath: String, _ filename: String) -> Void,
+        end: @escaping () -> Void
+    ) {
+        paths
+            .forEach {
+                let name = $0
+                let fullpath = "\(recursivePath)/\(name)"
+                let parsed = parse(fullpath, name)
+                collect(parsed, fullpath, name)
             }
-        }
-    }
 
-    FileManager()
-        .enumerator(atPath: recursivePath)?
-        .compactMap { $0 as?  String }
-        .filter     { $0.hasSuffix(".swift") }
-        .forEach    { addToQueue($0) }
-
-    group.notify(queue: DispatchQueue.main) {
-        print("ENDE")
+        end()
     }
 }
 
-func generateHTML(recursivePath: String) -> String {
-    let recursivePath = "/Users/willy/Sources/ios-stocks/Stocks"
+struct ThreadedRecurse: RecurseStrategy {
+    func recurse<T>(
+        recursivePath: String,
+        paths: [String],
+        parse: @escaping (_ fullpath: String, _ filename: String) -> T,
+        collect: @escaping (_ thing: T, _ fullpath: String, _ filename: String) -> Void,
+        end: @escaping () -> Void
+    ) {
+        let queue = DispatchQueue(
+            label: "processing",
+            qos: .userInitiated,
+            attributes: .concurrent,
+            autoreleaseFrequency: .inherit,
+            target: .global(qos: .userInitiated)
+        )
 
-    var results = [String : TypeInfoResult]()
+        let group = DispatchGroup()
 
-    FileManager()
-        .enumerator(atPath: recursivePath)?
-        .compactMap { $0 as?  String }
-        .filter     { $0.hasSuffix(".swift") }
-//        .prefix(10)
-        .forEach {
-            results[$0] = parseSingle(filename: "\(recursivePath)/\($0)")
+        let addToQueue = { (name: String) in
+            queue.async {
+                group.enter()
+                let fullpath = "\(recursivePath)/\(name)"
+                let parsed = parse(fullpath, name)
+
+                DispatchQueue.main.async {
+                    group.leave()
+                    collect(parsed, fullpath, name)
+                }
+            }
         }
 
+        paths.forEach {
+            addToQueue($0)
+        }
+
+        group.notify(queue: DispatchQueue.main) {
+            end()
+        }
+
+        dispatchMain()
+    }
+}
+
+typealias FileProcResult = [String : TypeInfoResult]
+
+func mergeResults(results: FileProcResult) -> Graph {
     var combinedGraph = Graph()
 
     for (filename, result) in results {
@@ -129,16 +156,59 @@ func generateHTML(recursivePath: String) -> String {
         }
     }
 
-    return graphHTML(graph: combinedGraph)
+    return combinedGraph
 }
 
 struct GenerateHTML: ParsableCommand {
-    @Argument(help: "Path of the directory to recursively scan")
+    enum Output: EnumerableFlag {
+        case d3
+        case vizjs
 
+        var generator: (Graph) -> String {
+            switch self {
+            case .d3: return graphHTML_D3
+            case .vizjs: return graphHTML_VizJS
+            }
+        }
+    }
+
+    @Argument(help: "Path of the directory to recursively scan")
     var path: String
 
+    @Flag(help: "Output format to use")
+    var format = Output.d3
+
+    @Flag(name: .shortAndLong, help: "Use multithread")
+    var threaded = false
+
     func run() throws {
-        print(generateHTML(recursivePath: path))
+        var results = FileProcResult()
+
+        let paths = (FileManager()
+            .enumerator(atPath: path)?
+            .compactMap { $0 as?  String }
+            .filter     { $0.hasSuffix(".swift") }
+        ) ?? []
+
+        let recursion: RecurseStrategy =
+            threaded
+                ? ThreadedRecurse()
+                : NonThreadedRecurse()
+
+        recursion.recurse(
+            recursivePath: path,
+            paths: paths,
+            parse: { (path, name) in parseSingle(filename: path) },
+            collect: { (parsed, path, name) in results[name] = parsed },
+            end: {
+                let combinedGraph = mergeResults(results: results)
+                let html = format.generator(combinedGraph)
+
+                print(html)
+
+                GenerateHTML.exit()
+            }
+        )
     }
 }
 

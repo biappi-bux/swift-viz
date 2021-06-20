@@ -1,5 +1,5 @@
 //
-//  VizHtml.swift
+//  Html.swift
 //  SwiftViz
 //
 //  Created by Antonio Malara on 18/06/2021.
@@ -26,28 +26,64 @@ func split(s: String) -> [String] {
     return result
 }
 
-func nodesHTML(graph: Graph) -> String {
-    let label = { (string: String) -> String in
-        split(s: string).joined(separator: "\\n")
+let label = { (string: String) -> String in
+    split(s: string).joined(separator: "\\n")
+}
+
+func graphHTML_D3(graph: Graph) -> String {
+    var nodes = [String]()
+    var nodeToIndex = [String : Int]()
+
+    for (i, node) in graph.nodes.enumerated() {
+        nodeToIndex[node] = i
+        nodes.append("        { id: '\(node)' },")
     }
 
-    return graph.nodes.map { "    { id: '\($0)', label: '\(label($0))' },\n" }.joined()
-}
+    let links = graph.edges.flatMap {
+        (parent, childs) in
 
-func edgesHTML(graph: Graph) -> String {
-    return graph.edges
-        .flatMap { (parent, childs) in
-            childs.map { child in
-                "    { from: '\(parent)', to: '\(child)' },\n"
-            }
+        childs.map {
+            child in
+
+            "        { source: '\(parent)', target: '\(child)' },"
         }
-        .joined()
+    }
+
+    return """
+        var the_data = {
+
+            nodes: [
+        \(nodes.joined(separator: "\n"))
+            ],
+
+            links: [
+        \(links.joined(separator: "\n"))
+            ],
+
+        }
+        """
 }
 
-func graphHTML(graph: Graph) -> String {
+func graphHTML_VizJS(graph: Graph) -> String {
+    let nodesHTML =
+        graph
+            .nodes
+            .map { "        { id: '\($0)', label: '\(label($0))' },\n" }
+            .joined()
+
+    let edgesHTML =
+        graph
+            .edges
+            .flatMap { (parent, childs) in
+                childs.map { child in
+                    "        { from: '\(parent)', to: '\(child)' },\n"
+                }
+            }
+            .joined()
+
     return mainHTML(
-        nodesHTML: nodesHTML(graph: graph),
-        edgesHTML: edgesHTML(graph: graph)
+        nodesHTML: nodesHTML,
+        edgesHTML: edgesHTML
     )
 }
 
@@ -129,6 +165,5 @@ func mainHTML(nodesHTML: String, edgesHTML: String) -> String {
 </body>
 </html>
 """
-
 }
 
