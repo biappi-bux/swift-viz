@@ -7,7 +7,7 @@ var zoom = d3.behavior.zoom()
 
 var force = d3.layout.force()
     .gravity(.5)
-    .distance(750)
+    .distance(200)
     .charge(-5000)
 
 
@@ -133,7 +133,7 @@ function got_graph(json) {
                 d3.event.stopPropagation()
             })
 
-    node.append("rect").attr('fill', 'blue')
+    //node.append("rect").attr('fill', 'blue')
 
     node
         .append("circle")

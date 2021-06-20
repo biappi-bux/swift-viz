@@ -36,7 +36,7 @@ func graphHTML_D3(graph: Graph) -> String {
 
     for (i, node) in graph.nodes.enumerated() {
         nodeToIndex[node] = i
-        nodes.append("        { id: '\(node)' },")
+        nodes.append("        { name: '\(node)' },")
     }
 
     let links = graph.edges.flatMap {
@@ -45,7 +45,7 @@ func graphHTML_D3(graph: Graph) -> String {
         childs.map {
             child in
 
-            "        { source: '\(parent)', target: '\(child)' },"
+            "        { source: \(nodeToIndex[parent]!), target: \(nodeToIndex[child]!) },"
         }
     }
 
